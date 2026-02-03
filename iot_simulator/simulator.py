@@ -13,7 +13,7 @@ BACKEND_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")
 SEND_INTERVAL_SECONDS = 60  # Send data every 60 seconds
 DEVICE_ID = os.getenv("DEVICE_ID", "device_001")
 DEVICE_NAME = os.getenv("DEVICE_NAME", "Smart Meter 001")
-USER_EMAIL = os.getenv("USER_EMAIL", "test@example.com")
+USER_EMAIL = os.getenv("amir", "test@.com")
 USER_PASSWORD = os.getenv("USER_PASSWORD", "testpassword123")
 
 # Consumption range (kWh per reading)

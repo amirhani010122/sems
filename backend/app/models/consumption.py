@@ -3,6 +3,8 @@ from typing import Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from .user import PyObjectId
+from sqlalchemy import Column, String, Float, Date
+from backend.app.models.base import Base
 
 
 class Consumption(BaseModel):
@@ -16,3 +18,11 @@ class Consumption(BaseModel):
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
         collection = "consumption"
+
+
+class DailyConsumption(Base):
+    __tablename__ = "daily_consumption"
+
+    device_id = Column(String, primary_key=True, index=True)
+    date = Column(Date, primary_key=True, index=True)
+    consumption = Column(Float, nullable=False)

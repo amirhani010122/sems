@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel
 
 
@@ -17,3 +17,17 @@ class ConsumptionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DailyConsumptionCreate(BaseModel):
+    device_id: str
+    consumption: float
+
+
+class DailyConsumptionResponse(BaseModel):
+    device_id: str
+    date: date
+    consumption: float
+
+    class Config:
+        orm_mode = True
