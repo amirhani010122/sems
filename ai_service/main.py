@@ -35,7 +35,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "helloooooooooo"}
 
 
 @app.get("/api/v1/analysis")

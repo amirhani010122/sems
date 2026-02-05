@@ -4,115 +4,91 @@ from datetime import datetime
 from typing import Dict, List
 from .analysis_service import AnalysisService
 
-
 class RecommendationService:
     def __init__(self, backend_api_url: str):
         self.backend_api_url = backend_api_url
         self.analysis_service = AnalysisService(backend_api_url)
     
-    async def fetch_consumption_data(self, user_id: str) -> List[Dict]:
-        """Fetch consumption data from backend API"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.backend_api_url}/api/internal/consumption",
-                params={"user_id": user_id},
-                headers={"X-Service-Key": "internal-service-key-change-in-production"},
-                timeout=30.0
-            )
-            if response.status_code == 200:
-                return response.json()
-            return []
-    
     async def fetch_subscription_data(self, user_id: str) -> Dict:
-        """Fetch subscription data from backend API"""
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.backend_api_url}/api/internal/subscription",
-                params={"user_id": user_id},
-                headers={"X-Service-Key": "internal-service-key-change-in-production"},
-                timeout=30.0
-            )
-            if response.status_code == 200:
-                return response.json()
-            return None
-    
+            try:
+                response = await client.get(
+                    f"{self.backend_api_url}/api/internal/subscription",
+                    params={"user_id": user_id},
+                    headers={"X-Service-Key": "internal-service-key-change-in-production"},
+                    timeout=30.0
+                )
+                return response.json() if response.status_code == 200 else None
+            except Exception: return None
+
     async def get_recommendations(self, user_id: str) -> Dict:
-        """Generate personalized energy-saving recommendations"""
-        # Get analysis
-        analysis = await self.analysis_service.analyze_consumption(user_id)
+        """توليد توصيات ذكية جداً بناءً على تحليل الـ AI"""
+        # جلب التحليل المتطور من الـ AnalysisService اللي طورناه سوا
+        analysis_result = await self.analysis_service.analyze_consumption(user_id)
         subscription = await self.fetch_subscription_data(user_id)
         
         recommendations = []
-        
-        # Analyze patterns and generate recommendations
-        if 'patterns' in analysis:
-            patterns = analysis['patterns']
-            
-            # Peak hour recommendation
-            peak_hour = patterns.get('peak_hour', None)
-            if peak_hour is not None:
-                if peak_hour >= 18 and peak_hour <= 22:
-                    recommendations.append({
-                        "type": "peak_hour_usage",
-                        "priority": "high",
-                        "title": "Reduce Peak Hour Usage",
-                        "description": f"Your peak consumption is between {peak_hour}:00. Consider shifting heavy appliance usage to off-peak hours (late night or early morning) to reduce costs.",
-                        "estimated_savings": "10-15%"
-                    })
-            
-            # Trend recommendation
-            trend = patterns.get('trend', 'stable')
-            if trend == 'increasing':
-                recommendations.append({
-                    "type": "increasing_trend",
-                    "priority": "medium",
-                    "title": "Consumption Trend Alert",
-                    "description": "Your energy consumption is showing an increasing trend. Review your usage patterns and identify appliances consuming excessive energy.",
-                    "estimated_savings": "5-10%"
-                })
-        
-        # Usage percentage recommendation
+
+        # 1. تحليل الشذوذ (Anomaly) - أولوية قصوى
+        if analysis_result.get("forecast", {}).get("anomalies_detected", 0) > 0:
+            recommendations.append({
+                "type": "emergency",
+                "priority": "CRITICAL",
+                "title": "فحص فوري للأجهزة",
+                "description": "لقد اكتشف الذكاء الاصطناعي قفزة غير طبيعية في استهلاكك. قد يكون هناك عطل في أحد الأجهزة أو تسريب كهربائي.",
+                "action": "تأكد من إطفاء الأجهزة غير المستخدمة حالياً وفحص التوصيلات."
+            })
+
+        # 2. تحليل ساعة الذروة (Peak Hour) - أولوية عالية
+        peak_hour = analysis_result.get("energy_profile", {}).get("peak_usage_hour_24h")
+        if peak_hour is not None:
+            time_str = f"{peak_hour}:00"
+            recommendations.append({
+                "type": "optimization",
+                "priority": "HIGH",
+                "title": "تغيير وقت الاستخدام الكثيف",
+                "description": f"معظم استهلاكك يتركز الساعة {time_str}. نقل استخدام الأجهزة الثقيلة (غسالة، سخان) إلى وقت مبكر سيوفر لك في الشريحة.",
+                "estimated_savings": "12% من قيمة الفاتورة"
+            })
+
+        # 3. تحليل الاتجاه (Trend)
+        trend = analysis_result.get("forecast", {}).get("trend_direction")
+        if trend == "Upward":
+            recommendations.append({
+                "type": "alert",
+                "priority": "MEDIUM",
+                "title": "منحنى الاستهلاك في تصاعد",
+                "description": "استهلاكك يزداد يومياً بشكل تدريجي. ننصحك بمراجعة إعدادات التكييف أو السخان لتقليل هذا النمو.",
+                "estimated_savings": "50-100 جنيه شهرياً"
+            })
+
+        # 4. نصيحة الباقة (Subscription)
         if subscription:
-            remaining = subscription.get('remaining_quota', 0)
-            # We need total quota - would need to fetch plan details
-            # For now, use a generic recommendation
-            if remaining < 100:  # Assuming low remaining
+            remaining = subscription.get("remaining_quota", 0)
+            if remaining < 50:
                 recommendations.append({
-                    "type": "quota_warning",
-                    "priority": "high",
-                    "title": "Plan Quota Running Low",
-                    "description": f"You have {remaining:.2f} kWh remaining. Consider reducing non-essential usage to extend your plan duration.",
-                    "estimated_savings": "Extend plan by 2-3 days"
+                    "type": "budget",
+                    "priority": "HIGH",
+                    "title": "اقتراب نفاذ الرصيد",
+                    "description": f"باقي لديك {round(remaining, 1)} كيلوواط فقط. فعل 'وضع التوفير' الآن لضمان استمرار الخدمة ليومين إضافيين.",
+                    "action": "إعادة شحن الرصيد"
                 })
-        
-        # General recommendations
-        recommendations.extend([
-            {
-                "type": "appliance_efficiency",
-                "priority": "medium",
-                "title": "Upgrade to Energy-Efficient Appliances",
-                "description": "Consider replacing old appliances with ENERGY STAR certified models. They consume 10-50% less energy.",
-                "estimated_savings": "15-30%"
-            },
-            {
-                "type": "smart_thermostat",
-                "priority": "low",
-                "title": "Use Smart Thermostat",
-                "description": "A programmable thermostat can help optimize heating and cooling, reducing energy waste.",
-                "estimated_savings": "10-15%"
-            },
-            {
-                "type": "unplug_devices",
-                "priority": "low",
-                "title": "Unplug Unused Devices",
-                "description": "Many devices consume energy even when turned off. Unplug chargers and electronics when not in use.",
-                "estimated_savings": "5-10%"
-            }
-        ])
-        
+
+        # 5. نصيحة ذكية عامة (بناءً على التوقعات)
+        prediction = analysis_result.get("forecast", {}).get("next_reading_estimate", 0)
+        if prediction > 30: # لو التوقع عالي
+            recommendations.append({
+                "type": "general",
+                "priority": "LOW",
+                "title": "نصيحة الصيف/الشتاء",
+                "description": "توقعاتنا تشير لاستهلاك عالٍ غداً. تأكد من ضبط التكييف على 24 درجة لتوفير الطاقة.",
+                "estimated_savings": "20%"
+            })
+
         return {
             "user_id": user_id,
-            "recommendations": recommendations,
-            "total_recommendations": len(recommendations),
+            "status": analysis_result.get("ai_insight", {}).get("status", "Healthy"),
+            "top_recommendation": recommendations[0] if recommendations else None,
+            "all_recommendations": sorted(recommendations, key=lambda x: x['priority'] == 'CRITICAL', reverse=True),
             "generated_at": datetime.utcnow().isoformat()
         }
