@@ -11,7 +11,6 @@ class AnalysisService:
         self.backend_api_url = backend_api_url
 
     async def fetch_consumption_data(self, user_id: str) -> List[Dict]:
-        """إحضار البيانات من الباكيند"""
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(
@@ -21,49 +20,64 @@ class AnalysisService:
                     timeout=30.0
                 )
                 return response.json() if response.status_code == 200 else []
-            except Exception:
-                return []
+            except Exception: return []
+
+    def generate_ai_recommendation(self, prediction: float, trend: float, anomalies: int) -> str:
+        """محرك نصائح ذكي بناءً على نتائج الـ AI"""
+        if anomalies > 0:
+            return "تنبيه: تم رصد سحب مفاجئ وغير معتاد. يرجى التحقق من الأجهزة التي تعمل حالياً أو فحص التوصيلات."
+        
+        if trend > 0.5:
+            return f"نلاحظ زيادة مستمرة في استهلاكك. نتوقع أن يرتفع استهلاكك غداً إلى {round(prediction, 1)} كيلوواط. حاول تقليل الأحمال غير الضرورية."
+        
+        if prediction < 10:
+            return "أداء ممتاز! استهلاكك منخفض ومستقر حالياً. استمر في هذا النمط لتوفير المزيد في فاتورتك القادمة."
+        
+        return "استهلاكك في الحدود الطبيعية. ننصحك دائماً بفصل الأجهزة في ساعات الذروة."
 
     async def analyze_consumption(self, user_id: str) -> Dict:
         data = await self.fetch_consumption_data(user_id)
-        if len(data) < 5:  # الـ AI يحتاج على الأقل 5 سجلات ليعطي نتائج منطقية
-            return {"status": "Need more data for AI analysis"}
+        if len(data) < 5:
+            return {"status": "Waiting for more data points..."}
 
         df = pd.DataFrame(data)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df.sort_values('timestamp')
 
-        # --- الجزء الأول: اكتشاف الاستهلاك غير الطبيعي (Anomaly Detection) ---
-        # الـ AI بيتعلم نمطك وبيدور على الأرقام اللي "مش راكبة" مع الباقي
-        iso_forest = IsolationForest(contamination=0.1) # يفترض إن 10% من البيانات قد تكون أخطاء
+        # 1. كشف الشذوذ (Anomaly Detection)
+        iso_forest = IsolationForest(contamination=0.05, random_state=42)
         df['anomaly'] = iso_forest.fit_predict(df[['consumption_value']])
-        anomalies_count = len(df[df['anomaly'] == -1])
+        anomalies_count = int((df['anomaly'] == -1).sum())
 
-        # --- الجزء الثاني: التنبؤ بالمستقبل (Future Prediction) ---
-        # بنعلم الموديل العلاقة بين ترتيب الأيام وقيمة الاستهلاك
-        df['day_num'] = np.arange(len(df)).reshape(-1, 1)
+        # 2. التنبؤ بالاستهلاك القادم (Regression)
+        df['day_index'] = np.arange(len(df)).reshape(-1, 1)
         model = LinearRegression()
-        model.fit(df[['day_num']], df['consumption_value'])
+        model.fit(df[['day_index']], df['consumption_value'])
         
-        # توقع استهلاك بكره (اليوم التالي في الترتيب)
-        next_day_index = np.array([[len(df)]])
-        prediction = model.predict(next_day_index)[0]
+        trend = model.coef_[0] # معامل الميل (هل بيزيد ولا بيقل؟)
+        prediction = model.predict([[len(df)]])[0]
 
-        # --- الجزء الثالث: حسابات إحصائية ذكية ---
-        total = df['consumption_value'].sum()
-        peak_hour = df['timestamp'].dt.hour.value_counts().idxmax()
+        # 3. استخراج ساعة الذروة (Peak Hour)
+        df['hour'] = df['timestamp'].dt.hour
+        peak_hour = int(df.groupby('hour')['consumption_value'].mean().idxmax())
+
+        # 4. توليد النصيحة الذكية
+        recommendation = self.generate_ai_recommendation(prediction, trend, anomalies_count)
 
         return {
             "user_id": user_id,
-            "ai_report": {
-                "summary": "تم تحليل بياناتك باستخدام نماذج تعلم الآلة",
-                "predicted_next_consumption": round(float(prediction), 2),
-                "anomaly_alert": "نظامنا اكتشف استهلاكاً غير طبيعي" if anomalies_count > 0 else "استهلاكك مستقر",
-                "anomalies_found": anomalies_count
+            "ai_insight": {
+                "summary": "تقرير الذكاء الاصطناعي اليومي",
+                "recommendation": recommendation,
+                "status": "Warning" if anomalies_count > 0 or trend > 1 else "Healthy"
             },
-            "statistics": {
-                "total_kwh": float(total),
-                "peak_usage_hour": int(peak_hour),
-                "confidence_score": "High" if len(data) > 20 else "Low"
+            "forecast": {
+                "next_reading_estimate": round(float(prediction), 2),
+                "trend_direction": "Upward" if trend > 0 else "Downward",
+                "anomalies_detected": anomalies_count
+            },
+            "energy_profile": {
+                "peak_hour_24h": peak_hour,
+                "total_usage": round(float(df['consumption_value'].sum()), 2)
             }
         }

@@ -10,7 +10,11 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
-
+    
+# {
+#     emaIl: "amir@test.com",
+#     password : "123"
+# }
 
 class Token(BaseModel):
     access_token: str
